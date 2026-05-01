@@ -22,7 +22,7 @@ PyTorch may require a Python version supported by the official wheels. If instal
 ```bash
 python prepare_data.py
 python console_report.py
-python train.py --epochs 8 --batch-size 32 --freeze-backbone
+python train.py --epochs 20 --batch-size 32 --lr 5e-5 --device cuda
 python console_report.py
 python predict.py PokemonData/Pikachu/00000004.jpg --engine torch
 ```
@@ -35,11 +35,19 @@ Generated outputs:
 - `artifacts/pokemon-mobilenetv3-small.pt`
 - `artifacts/training_metrics.json`
 
-Current baseline from `--epochs 8 --batch-size 32 --freeze-backbone`:
+Previous baseline from `--epochs 8 --batch-size 32 --freeze-backbone`:
 
 - validation top-1: 77.81%
 - validation top-5: 92.14%
 - checkpoint size: about 6.6 MB
+
+The current recommended training run fine-tunes the full MobileNetV3-Small backbone:
+
+```bash
+python train.py --epochs 20 --batch-size 32 --lr 5e-5 --device cuda
+```
+
+If CUDA is not available on the machine, omit `--device cuda` to let the script fall back to the best available device.
 
 ## Optional ONNX Export
 

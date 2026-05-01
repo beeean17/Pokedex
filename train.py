@@ -72,11 +72,16 @@ def build_model(num_classes: int, pretrained: bool, freeze_backbone: bool) -> nn
 
 def choose_device(requested: str) -> torch.device:
     if requested != "auto":
-        return torch.device(requested)
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
+        device = torch.device(requested)
+        if device.type == "cuda" and not torch.cuda.is_available():
+            raise SystemExit("CUDA was requested, but torch.cuda.is_available() is false.")
+        if device.type == "mps" and not torch.backends.mps.is_available():
+            raise SystemExit("MPS was requested, but torch.backends.mps.is_available() is false.")
+        return device
     if torch.cuda.is_available():
         return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
     return torch.device("cpu")
 
 
@@ -85,9 +90,17 @@ def make_transforms() -> tuple[transforms.Compose, transforms.Compose]:
         [
             LetterboxResize(INPUT_SIZE),
             transforms.RandomHorizontalFlip(),
+            transforms.RandomAffine(
+                degrees=10,
+                translate=(0.08, 0.08),
+                scale=(0.85, 1.15),
+                fill=(255, 255, 255),
+            ),
+            transforms.RandomPerspective(distortion_scale=0.15, p=0.2, fill=(255, 255, 255)),
             transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15),
             transforms.ToTensor(),
             transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+            transforms.RandomErasing(p=0.25, scale=(0.02, 0.12), ratio=(0.3, 3.3), value="random"),
         ]
     )
     val_transform = transforms.Compose(
@@ -160,9 +173,9 @@ def main() -> None:
     parser.add_argument("--labels", default="artifacts/labels.v1.json", type=Path)
     parser.add_argument("--output", default="artifacts/pokemon-mobilenetv3-small.pt", type=Path)
     parser.add_argument("--metrics-output", default="artifacts/training_metrics.json", type=Path)
-    parser.add_argument("--epochs", default=8, type=int)
+    parser.add_argument("--epochs", default=20, type=int)
     parser.add_argument("--batch-size", default=32, type=int)
-    parser.add_argument("--lr", default=3e-4, type=float)
+    parser.add_argument("--lr", default=5e-5, type=float)
     parser.add_argument("--num-workers", default=0, type=int)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--no-pretrained", action="store_true")
@@ -190,6 +203,7 @@ def main() -> None:
     )
 
     device = choose_device(args.device)
+    print(f"Using device: {device}")
     model = build_model(
         num_classes=len(classes),
         pretrained=not args.no_pretrained,
