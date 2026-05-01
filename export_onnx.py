@@ -85,15 +85,21 @@ def main() -> None:
         output_names=["logits"],
         dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}},
         opset_version=args.opset,
+        dynamo=False,
     )
     print(f"Wrote fp32 ONNX: {args.fp32_output}")
 
-    args.int8_output.parent.mkdir(parents=True, exist_ok=True)
-    quantize_dynamic(args.fp32_output, args.int8_output)
-    print(f"Wrote int8 ONNX: {args.int8_output}")
+    onnx_output = args.fp32_output
+    try:
+        args.int8_output.parent.mkdir(parents=True, exist_ok=True)
+        quantize_dynamic(args.fp32_output, args.int8_output)
+        onnx_output = args.int8_output
+        print(f"Wrote int8 ONNX: {args.int8_output}")
+    except Exception as exc:
+        print(f"Skipped int8 quantization: {exc}")
 
     if args.smoke_image:
-        comparison = compare_predictions(args.smoke_image, args.checkpoint, args.int8_output, args.labels)
+        comparison = compare_predictions(args.smoke_image, args.checkpoint, onnx_output, args.labels)
         smoke_output = args.fp32_output.parent / "onnx_smoke_test.json"
         smoke_output.write_text(json.dumps(comparison, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"Wrote smoke test comparison: {smoke_output}")

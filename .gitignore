@@ -1,16 +1,35 @@
-.idea/*
-PokemonData/
+# Editors
+.idea/
+.vscode/
+
+# Python
 .venv/
 __pycache__/
 *.py[cod]
 
-# Generated ML outputs
+# Local dataset and generated ML outputs
+PokemonData/
 artifacts/
-public/models/*.onnx
 public/models/*.ort
 
-# Frontend outputs
+# React / Vite dependencies and build outputs
 node_modules/
 dist/
 .vite/
+coverage/
+
+# Logs
+*.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# OS metadata
+.DS_Store
+Thumbs.db

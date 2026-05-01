@@ -1,6 +1,6 @@
 # Pokedex
 
-Pokemon classifier pipeline with console-first model training and validation.
+Pokemon classifier pipeline with Python training and a static React browser classifier.
 
 ## First Milestone
 
@@ -8,12 +8,11 @@ Pokemon classifier pipeline with console-first model training and validation.
 2. Train a MobileNetV3-Small transfer-learning checkpoint.
 3. Check dataset, training metrics, and sample predictions in the console.
 
-The browser app milestone is intentionally deferred. This repository is currently focused on Python-based model verification.
-
 ## Setup
 
 ```bash
 python -m pip install -r requirements.txt
+npm install
 ```
 
 PyTorch may require a Python version supported by the official wheels. If install fails on a very new Python runtime, create a Python 3.11 or 3.12 virtual environment and reinstall the requirements.
@@ -51,3 +50,25 @@ python export_onnx.py --smoke-image PokemonData/Pikachu/00000004.jpg
 Generated output:
 
 - `artifacts/pokemon-mobilenetv3-small-int8-v1.onnx`
+
+For the React app, copy the FP32 browser model and labels into `public/models/`:
+
+```powershell
+Copy-Item artifacts/pokemon-mobilenetv3-small-fp32.onnx public/models/pokemon-mobilenetv3-small-fp32.onnx -Force
+Copy-Item artifacts/labels.v1.json public/models/labels.v1.json -Force
+```
+
+## Static React Classifier
+
+The React app runs inference entirely in the browser with `onnxruntime-web`. Images are preprocessed locally in a canvas and are not uploaded to a server.
+
+```bash
+npm run dev
+npm run build
+```
+
+Local app URL:
+
+```text
+http://127.0.0.1:5173
+```
