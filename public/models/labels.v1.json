@@ -1,6 +1,6 @@
 {
   "version": "v1",
-  "modelName": "pokemon-mobilenetv3-small-int8-v1",
+  "modelName": "pokemon-efficientnet-b0-fp32-v1",
   "inputSize": 224,
   "mean": [
     0.485,
