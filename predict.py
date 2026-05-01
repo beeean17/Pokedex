@@ -65,7 +65,14 @@ def load_torch_model(checkpoint_path: Path, num_classes: int):
         raise RuntimeError("PyTorch/torchvision are required for checkpoint inference.") from exc
 
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
-    model = models.mobilenet_v3_small(weights=None)
+    model_name = checkpoint.get("modelName", "pokemon-efficientnet-b0")
+    if model_name == "pokemon-efficientnet-b0":
+        model = models.efficientnet_b0(weights=None)
+    elif model_name == "pokemon-mobilenetv3-small":
+        model = models.mobilenet_v3_small(weights=None)
+    else:
+        raise ValueError(f"Unsupported checkpoint modelName: {model_name}")
+
     in_features = model.classifier[-1].in_features
     model.classifier[-1] = torch.nn.Linear(in_features, num_classes)
     model.load_state_dict(checkpoint["stateDict"])
@@ -117,8 +124,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Pokemon image prediction with PyTorch or ONNX.")
     parser.add_argument("image", type=Path)
     parser.add_argument("--labels", default="artifacts/labels.v1.json", type=Path)
-    parser.add_argument("--checkpoint", default="artifacts/pokemon-mobilenetv3-small.pt", type=Path)
-    parser.add_argument("--onnx", default="artifacts/pokemon-mobilenetv3-small-int8-v1.onnx", type=Path)
+    parser.add_argument("--checkpoint", default="artifacts/pokemon-efficientnet-b0.pt", type=Path)
+    parser.add_argument("--onnx", default="artifacts/pokemon-efficientnet-b0-fp32.onnx", type=Path)
     parser.add_argument("--engine", choices=["torch", "onnx"], default="torch")
     parser.add_argument("--top-k", default=5, type=int)
     args = parser.parse_args()

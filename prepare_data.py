@@ -177,7 +177,7 @@ def main() -> None:
 
     labels_manifest = {
         "version": "v1",
-        "modelName": "pokemon-mobilenetv3-small-int8-v1",
+        "modelName": "pokemon-efficientnet-b0-fp32-v1",
         "inputSize": INPUT_SIZE,
         "mean": IMAGENET_MEAN,
         "std": IMAGENET_STD,

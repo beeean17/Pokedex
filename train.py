@@ -59,8 +59,8 @@ def load_records(index_path: Path) -> list[dict[str, object]]:
 
 
 def build_model(num_classes: int, pretrained: bool, freeze_backbone: bool) -> nn.Module:
-    weights = models.MobileNet_V3_Small_Weights.DEFAULT if pretrained else None
-    model = models.mobilenet_v3_small(weights=weights)
+    weights = models.EfficientNet_B0_Weights.DEFAULT if pretrained else None
+    model = models.efficientnet_b0(weights=weights)
     if freeze_backbone:
         for parameter in model.features.parameters():
             parameter.requires_grad = False
@@ -168,10 +168,10 @@ def evaluate(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train MobileNetV3-Small for Pokemon classification.")
+    parser = argparse.ArgumentParser(description="Train EfficientNet-B0 for Pokemon classification.")
     parser.add_argument("--index", default="artifacts/dataset_index.json", type=Path)
     parser.add_argument("--labels", default="artifacts/labels.v1.json", type=Path)
-    parser.add_argument("--output", default="artifacts/pokemon-mobilenetv3-small.pt", type=Path)
+    parser.add_argument("--output", default="artifacts/pokemon-efficientnet-b0.pt", type=Path)
     parser.add_argument("--metrics-output", default="artifacts/training_metrics.json", type=Path)
     parser.add_argument("--epochs", default=20, type=int)
     parser.add_argument("--batch-size", default=32, type=int)
@@ -258,7 +258,7 @@ def main() -> None:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             torch.save(
                 {
-                    "modelName": "pokemon-mobilenetv3-small",
+                    "modelName": "pokemon-efficientnet-b0",
                     "stateDict": model.state_dict(),
                     "classes": classes,
                     "inputSize": INPUT_SIZE,

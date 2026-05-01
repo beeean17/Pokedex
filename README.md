@@ -5,7 +5,7 @@ Pokemon classifier pipeline with Python training and a static React browser clas
 ## First Milestone
 
 1. Prepare the local dataset index from `PokemonData/`.
-2. Train a MobileNetV3-Small transfer-learning checkpoint.
+2. Train an EfficientNet-B0 transfer-learning checkpoint.
 3. Check dataset, training metrics, and sample predictions in the console.
 
 ## Setup
@@ -32,7 +32,7 @@ Generated outputs:
 - `artifacts/dataset_index.json`
 - `artifacts/class_to_idx.json`
 - `artifacts/labels.v1.json`
-- `artifacts/pokemon-mobilenetv3-small.pt`
+- `artifacts/pokemon-efficientnet-b0.pt`
 - `artifacts/training_metrics.json`
 
 Previous baseline from `--epochs 8 --batch-size 32 --freeze-backbone`:
@@ -41,7 +41,7 @@ Previous baseline from `--epochs 8 --batch-size 32 --freeze-backbone`:
 - validation top-5: 92.14%
 - checkpoint size: about 6.6 MB
 
-The current recommended training run fine-tunes the full MobileNetV3-Small backbone:
+The current recommended training run fine-tunes the full EfficientNet-B0 backbone:
 
 ```bash
 python train.py --epochs 20 --batch-size 32 --lr 5e-5 --device cuda
@@ -57,12 +57,13 @@ python export_onnx.py --smoke-image PokemonData/Pikachu/00000004.jpg
 
 Generated output:
 
-- `artifacts/pokemon-mobilenetv3-small-int8-v1.onnx`
+- `artifacts/pokemon-efficientnet-b0-fp32.onnx`
+- `artifacts/pokemon-efficientnet-b0-int8-v1.onnx` if int8 quantization succeeds
 
 For the React app, copy the FP32 browser model and labels into `public/models/`:
 
 ```powershell
-Copy-Item artifacts/pokemon-mobilenetv3-small-fp32.onnx public/models/pokemon-mobilenetv3-small-fp32.onnx -Force
+Copy-Item artifacts/pokemon-efficientnet-b0-fp32.onnx public/models/pokemon-efficientnet-b0-fp32.onnx -Force
 Copy-Item artifacts/labels.v1.json public/models/labels.v1.json -Force
 ```
 

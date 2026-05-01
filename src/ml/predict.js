@@ -1,6 +1,6 @@
 import { imageFileToTensor } from "./preprocess.js";
 
-const MODEL_URL = "/models/pokemon-mobilenetv3-small-fp32.onnx";
+const MODEL_URL = "/models/pokemon-efficientnet-b0-fp32.onnx";
 const LABELS_URL = "/models/labels.v1.json";
 
 let modelPromise;
