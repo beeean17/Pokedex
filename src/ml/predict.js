@@ -1,7 +1,8 @@
 import { imageFileToTensor } from "./preprocess.js";
 
-const MODEL_URL = "/models/pokemon-efficientnet-b0-fp32.onnx";
-const LABELS_URL = "/models/labels.v1.json";
+const BASE_URL = import.meta.env.BASE_URL;
+const MODEL_URL = `${BASE_URL}models/pokemon-efficientnet-b0-fp32.onnx`;
+const LABELS_URL = `${BASE_URL}models/labels.v1.json`;
 
 let modelPromise;
 let runtimePromise;
@@ -10,7 +11,7 @@ async function loadRuntime() {
   if (!runtimePromise) {
     runtimePromise = import("onnxruntime-web").then((runtime) => {
       runtime.env.wasm.numThreads = 1;
-      runtime.env.wasm.wasmPaths = "/ort/";
+      runtime.env.wasm.wasmPaths = `${BASE_URL}ort/`;
       return runtime;
     });
   }

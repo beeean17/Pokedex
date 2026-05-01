@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { loadModel, predictPokemon } from "./ml/predict.js";
 import { isMobileLike } from "./utils/device.js";
 
-const SAMPLE_PATH = "/sample/test1.jpg";
+const BASE_URL = import.meta.env.BASE_URL;
+const SAMPLE_PATH = `${BASE_URL}sample/test1.jpg`;
 const LOW_CONFIDENCE_THRESHOLD = 0.45;
-const THUMBNAIL_MANIFEST_URL = "/pokemon-thumbnails/manifest.json";
-const POKEMON_KO_NAMES_URL = "/i18n/pokemon-ko.json";
+const THUMBNAIL_MANIFEST_URL = `${BASE_URL}pokemon-thumbnails/manifest.json`;
+const POKEMON_KO_NAMES_URL = `${BASE_URL}i18n/pokemon-ko.json`;
 
 const TEXT = {
   en: {
