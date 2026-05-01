@@ -1,0 +1,7 @@
+kagglehub>=1.0.1
+numpy>=1.26
+pillow>=10.0
+torch>=2.3
+torchvision>=0.18
+onnx>=1.16
+onnxruntime>=1.18
