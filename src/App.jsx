@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { loadModel, predictPokemon } from "./ml/predict.js";
-import { isMobileLike } from "./utils/device.js";
 
 const BASE_URL = import.meta.env.BASE_URL;
 const SAMPLE_PATH = `${BASE_URL}sample/test1.jpg`;
@@ -73,7 +72,6 @@ const TEXT = {
 };
 
 export default function App() {
-  const [isBlocked, setIsBlocked] = useState(false);
   const [modelStatus, setModelStatus] = useState("loading");
   const [previewUrl, setPreviewUrl] = useState(SAMPLE_PATH);
   const [fileName, setFileName] = useState("test1.jpg");
@@ -96,7 +94,6 @@ export default function App() {
   }, [modelStatus, t]);
 
   useEffect(() => {
-    setIsBlocked(isMobileLike());
     loadModel()
       .then(() => setModelStatus("ready"))
       .catch((loadError) => {
@@ -172,18 +169,6 @@ export default function App() {
     } finally {
       setIsPredicting(false);
     }
-  }
-
-  if (isBlocked) {
-    return (
-      <main className="app-page centered-page">
-        <section className="message-card">
-          <p className="eyebrow">{t.blockedEyebrow}</p>
-          <h1>POKEDEX</h1>
-          <p>{t.blockedBody}</p>
-        </section>
-      </main>
-    );
   }
 
   return (

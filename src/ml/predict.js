@@ -11,7 +11,6 @@ async function loadRuntime() {
   if (!runtimePromise) {
     runtimePromise = import("onnxruntime-web").then((runtime) => {
       runtime.env.wasm.numThreads = 1;
-      runtime.env.wasm.wasmPaths = `${BASE_URL}ort/`;
       return runtime;
     });
   }
