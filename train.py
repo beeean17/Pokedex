@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 
@@ -21,6 +22,20 @@ except ImportError as exc:  # pragma: no cover - exercised before dependencies e
 INPUT_SIZE = 224
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
+
+
+def configure_ssl_cert_file() -> None:
+    if os.environ.get("SSL_CERT_FILE"):
+        return
+
+    try:
+        import certifi
+    except ImportError:
+        return
+
+    cert_path = certifi.where()
+    os.environ["SSL_CERT_FILE"] = cert_path
+    os.environ.setdefault("REQUESTS_CA_BUNDLE", cert_path)
 
 
 class PokemonDataset(Dataset):
@@ -51,6 +66,23 @@ class LetterboxResize:
         top = (self.size - image.height) // 2
         canvas.paste(image, (left, top))
         return canvas
+
+
+class RandomCropOrLetterbox:
+    def __init__(self, size: int, crop_probability: float, crop_scale: tuple[float, float]) -> None:
+        self.letterbox = LetterboxResize(size)
+        self.crop_probability = crop_probability
+        self.crop = transforms.RandomResizedCrop(
+            size,
+            scale=crop_scale,
+            ratio=(0.75, 1.33),
+            interpolation=transforms.InterpolationMode.BILINEAR,
+        )
+
+    def __call__(self, image: Image.Image) -> Image.Image:
+        if torch.rand(1).item() < self.crop_probability:
+            return self.crop(image.convert("RGB"))
+        return self.letterbox(image)
 
 
 def load_records(index_path: Path) -> list[dict[str, object]]:
@@ -85,10 +117,14 @@ def choose_device(requested: str) -> torch.device:
     return torch.device("cpu")
 
 
-def make_transforms() -> tuple[transforms.Compose, transforms.Compose]:
+def make_transforms(crop_probability: float, crop_scale_min: float) -> tuple[transforms.Compose, transforms.Compose]:
     train_transform = transforms.Compose(
         [
-            LetterboxResize(INPUT_SIZE),
+            RandomCropOrLetterbox(
+                INPUT_SIZE,
+                crop_probability=crop_probability,
+                crop_scale=(crop_scale_min, 1.0),
+            ),
             transforms.RandomHorizontalFlip(),
             transforms.RandomAffine(
                 degrees=10,
@@ -168,6 +204,8 @@ def evaluate(
 
 
 def main() -> None:
+    configure_ssl_cert_file()
+
     parser = argparse.ArgumentParser(description="Train EfficientNet-B0 for Pokemon classification.")
     parser.add_argument("--index", default="artifacts/dataset_index.json", type=Path)
     parser.add_argument("--labels", default="artifacts/labels.v1.json", type=Path)
@@ -180,6 +218,18 @@ def main() -> None:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--no-pretrained", action="store_true")
     parser.add_argument("--freeze-backbone", action="store_true")
+    parser.add_argument(
+        "--crop-probability",
+        default=0.55,
+        type=float,
+        help="Probability of training on a partial random crop instead of the full letterboxed image.",
+    )
+    parser.add_argument(
+        "--crop-scale-min",
+        default=0.35,
+        type=float,
+        help="Smallest area ratio used by RandomResizedCrop for partial/face-like crops.",
+    )
     args = parser.parse_args()
 
     labels_manifest = json.loads(args.labels.read_text(encoding="utf-8"))
@@ -188,7 +238,12 @@ def main() -> None:
     train_records = [row for row in records if row["split"] == "train"]
     val_records = [row for row in records if row["split"] == "val"]
 
-    train_transform, val_transform = make_transforms()
+    if not 0.0 <= args.crop_probability <= 1.0:
+        raise SystemExit("--crop-probability must be between 0.0 and 1.0.")
+    if not 0.05 <= args.crop_scale_min <= 1.0:
+        raise SystemExit("--crop-scale-min must be between 0.05 and 1.0.")
+
+    train_transform, val_transform = make_transforms(args.crop_probability, args.crop_scale_min)
     train_loader = DataLoader(
         PokemonDataset(train_records, train_transform),
         batch_size=args.batch_size,
@@ -204,6 +259,12 @@ def main() -> None:
 
     device = choose_device(args.device)
     print(f"Using device: {device}")
+    print(
+        "Training augmentation: "
+        f"{args.crop_probability:.0%} random partial crop "
+        f"(scale={args.crop_scale_min:.2f}-1.00), "
+        f"{1.0 - args.crop_probability:.0%} full letterbox"
+    )
     model = build_model(
         num_classes=len(classes),
         pretrained=not args.no_pretrained,
@@ -265,6 +326,10 @@ def main() -> None:
                     "mean": IMAGENET_MEAN,
                     "std": IMAGENET_STD,
                     "metrics": val_metrics,
+                    "augmentation": {
+                        "cropProbability": args.crop_probability,
+                        "cropScaleMin": args.crop_scale_min,
+                    },
                 },
                 args.output,
             )
@@ -272,6 +337,10 @@ def main() -> None:
     final_metrics = {
         "durationSeconds": round(time.time() - started_at, 3),
         "bestValTop1": best_top1,
+        "augmentation": {
+            "cropProbability": args.crop_probability,
+            "cropScaleMin": args.crop_scale_min,
+        },
         "history": history,
     }
     args.metrics_output.parent.mkdir(parents=True, exist_ok=True)

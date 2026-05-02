@@ -77,6 +77,13 @@ def print_training_report(metrics_path: Path) -> None:
     print("== Training ==")
     print(f"Duration: {metrics.get('durationSeconds', 'n/a')}s")
     print(f"Best val top-1: {float(metrics.get('bestValTop1', 0.0)):.2%}")
+    augmentation = metrics.get("augmentation")
+    if augmentation:
+        print(
+            "Augmentation: "
+            f"{float(augmentation['cropProbability']):.0%} random crop, "
+            f"crop scale {float(augmentation['cropScaleMin']):.2f}-1.00"
+        )
     print()
 
     history = metrics.get("history", [])

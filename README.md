@@ -22,7 +22,7 @@ PyTorch may require a Python version supported by the official wheels. If instal
 ```bash
 python prepare_data.py
 python console_report.py
-python train.py --epochs 20 --batch-size 32 --lr 5e-5 --device cuda
+python train.py --epochs 20 --batch-size 32 --lr 5e-5 --device cuda --crop-probability 0.55 --crop-scale-min 0.35
 python console_report.py
 python predict.py PokemonData/Pikachu/00000004.jpg --engine torch
 ```
@@ -44,10 +44,12 @@ Previous baseline from `--epochs 8 --batch-size 32 --freeze-backbone`:
 The current recommended training run fine-tunes the full EfficientNet-B0 backbone:
 
 ```bash
-python train.py --epochs 20 --batch-size 32 --lr 5e-5 --device cuda
+python train.py --epochs 20 --batch-size 32 --lr 5e-5 --device cuda --crop-probability 0.55 --crop-scale-min 0.35
 ```
 
 If CUDA is not available on the machine, omit `--device cuda` to let the script fall back to the best available device.
+
+For face-only or partial Pokemon images, the training pipeline now mixes full letterboxed images with random partial crops. Increase `--crop-probability` if partial images matter more, or lower it if full-body accuracy drops.
 
 ## Optional ONNX Export
 
