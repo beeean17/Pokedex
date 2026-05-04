@@ -1,73 +1,73 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { loadModel, predictPokemon } from "./ml/predict.js";
 
 const BASE_URL = import.meta.env.BASE_URL;
 const SAMPLE_PATH = `${BASE_URL}sample/test1.jpg`;
 const LOW_CONFIDENCE_THRESHOLD = 0.45;
-const THUMBNAIL_MANIFEST_URL = `${BASE_URL}pokemon-thumbnails/manifest.json`;
 const POKEMON_KO_NAMES_URL = `${BASE_URL}i18n/pokemon-ko.json`;
 
 const TEXT = {
   en: {
-    blockedEyebrow: "Desktop browser recommended",
-    blockedBody: "This client-side model runs best on desktop Chrome or Edge.",
-    heroTitle: "PokeFinder",
-    heroBody: "Upload a Pokemon image and run local ONNX inference directly in the browser. No backend upload is used.",
+    heroBody:
+      "Upload a Pokemon image and compare the top five local ONNX predictions in one focused workspace.",
     modelReady: "Model ready",
     modelFailed: "Model failed",
     modelLoading: "Loading model",
-    chooseImage: "Choose specimen image",
-    fileHelp: "PNG, JPG, WEBP. Current file:",
-    runSample: "Run Sample",
-    pasteUrl: "Paste URL",
+    chooseImage: "Choose image",
+    fileHelp: "PNG, JPG, WEBP",
+    dropHelp: "PNG, JPG, WEBP · drag and drop supported",
+    currentFile: "Current file",
     chooseImageError: "Choose an image file.",
     classifying: "Classifying",
+    uploadTitle: "Uploaded image",
+    uploadBody: "Keep the source image visible while checking each ranked match.",
     analysisResults: "Analysis results",
-    matchesFound: "Matches found",
+    matchesFound: "Top 5 candidates",
     readyToAnalyze: "Ready to analyze",
     matches: "matches",
     lowConfidence: "Low confidence",
-    primaryMatch: "Primary match",
-    topPrediction: "Top prediction",
+    primaryMatch: "Most likely",
+    topPrediction: "Rank 1",
     confidence: "confidence",
     uncertainCopy:
       "The model is uncertain. A busy background, small subject, or unusual angle may be affecting the prediction.",
     strongCopy: "The model found a strong visual match for the uploaded specimen.",
-    alternativeMatch: "Alternative visual match",
-    recognitionTip: "Recognition tip",
-    tipBody: "For better accuracy, use a centered Pokemon with good lighting and less visual clutter in the background.",
+    alternativeMatch: "Candidate",
     noAnalysis: "No analysis yet",
-    noAnalysisBody: "Choose an image or run the sample to see ranked predictions here.",
+    noAnalysisBody: "Choose an image or run the sample to see five ranked predictions here.",
+    uploadedImage: "Uploaded image",
+    closePreview: "Close preview",
   },
   ko: {
-    blockedEyebrow: "데스크톱 브라우저 권장",
-    blockedBody: "이 클라이언트 모델은 데스크톱 Chrome 또는 Edge에서 가장 안정적으로 동작합니다.",
-    heroTitle: "PokeFinder",
-    heroBody: "포켓몬 이미지를 업로드하면 서버 업로드 없이 브라우저에서 바로 ONNX 추론을 실행합니다.",
+    heroBody:
+      "포켓몬 이미지를 올리면 브라우저 안에서 ONNX 추론을 실행하고, 상위 5개 후보를 한 화면에서 비교합니다.",
     modelReady: "모델 준비 완료",
     modelFailed: "모델 로드 실패",
     modelLoading: "모델 로딩 중",
-    chooseImage: "분석할 이미지 선택",
-    fileHelp: "PNG, JPG, WEBP. 현재 파일:",
-    runSample: "샘플 실행",
-    pasteUrl: "URL 붙여넣기",
+    chooseImage: "이미지 선택",
+    fileHelp: "PNG, JPG, WEBP",
+    dropHelp: "PNG, JPG, WEBP · 드래그 앤 드롭 지원",
+    currentFile: "현재 파일",
     chooseImageError: "이미지 파일을 선택하세요.",
     classifying: "분류 중",
+    uploadTitle: "업로드 이미지",
+    uploadBody: "원본 이미지를 고정해 두고 순위별 후보를 바로 비교하세요.",
     analysisResults: "분석 결과",
-    matchesFound: "일치 후보",
+    matchesFound: "상위 5개 후보",
     readyToAnalyze: "분석 준비 완료",
     matches: "개 후보",
     lowConfidence: "낮은 확신도",
-    primaryMatch: "1순위 예측",
-    topPrediction: "최상위 예측",
-    confidence: "확신도",
-    uncertainCopy: "모델의 확신도가 낮습니다. 복잡한 배경, 작은 피사체, 특이한 각도가 예측에 영향을 줄 수 있습니다.",
-    strongCopy: "업로드한 이미지와 강한 시각적 일치 결과를 찾았습니다.",
-    alternativeMatch: "대체 후보",
-    recognitionTip: "인식 팁",
-    tipBody: "정확도를 높이려면 포켓몬이 중앙에 있고 조명이 충분하며 배경이 복잡하지 않은 이미지를 사용하세요.",
-    noAnalysis: "아직 분석 결과 없음",
-    noAnalysisBody: "이미지를 선택하거나 샘플을 실행하면 예측 순위가 표시됩니다.",
+    primaryMatch: "가장 유력",
+    topPrediction: "1위 후보",
+    confidence: "일치율",
+    uncertainCopy:
+      "모델의 확신도가 낮습니다. 복잡한 배경, 작은 피사체, 특이한 각도가 예측에 영향을 줬을 수 있습니다.",
+    strongCopy: "업로드 이미지와 강하게 닮은 시각적 후보를 찾았습니다.",
+    alternativeMatch: "후보",
+    noAnalysis: "아직 분석 결과가 없습니다",
+    noAnalysisBody: "이미지를 선택하거나 샘플을 실행하면 순위별 예측이 표시됩니다.",
+    uploadedImage: "업로드 이미지",
+    closePreview: "미리보기 닫기",
   },
 };
 
@@ -78,12 +78,16 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [isPredicting, setIsPredicting] = useState(false);
-  const [thumbnails, setThumbnails] = useState({});
-  const [language, setLanguage] = useState("en");
+  const [isDragging, setIsDragging] = useState(false);
+  const [language, setLanguage] = useState("ko");
   const [pokemonKoNames, setPokemonKoNames] = useState({});
+  const [previewDialog, setPreviewDialog] = useState(null);
+  const resultsRef = useRef(null);
+  const initialSampleStarted = useRef(false);
 
   const topPrediction = result?.predictions?.[0];
-  const secondaryPredictions = result?.predictions?.slice(1, 4) ?? [];
+  const topFivePredictions = result?.predictions?.slice(0, 5) ?? [];
+  const secondaryPredictions = topFivePredictions.slice(1, 5);
   const isLowConfidence = topPrediction?.confidence < LOW_CONFIDENCE_THRESHOLD;
   const t = TEXT[language];
 
@@ -119,18 +123,53 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetch(THUMBNAIL_MANIFEST_URL)
-      .then((response) => {
-        if (!response.ok) return {};
-        return response.json();
-      })
-      .then((manifest) => setThumbnails(manifest))
-      .catch(() => setThumbnails({}));
-  }, []);
+    if (!topPrediction || isPredicting) return;
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [topPrediction, isPredicting]);
+
+  useEffect(() => {
+    if (modelStatus !== "ready" || initialSampleStarted.current) return;
+    initialSampleStarted.current = true;
+    runSamplePrediction();
+  }, [modelStatus]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   async function handleFileChange(event) {
     const file = event.target.files?.[0];
     if (!file) return;
+    await processImageFile(file);
+    event.target.value = "";
+  }
+
+  async function handleDrop(event) {
+    event.preventDefault();
+    setIsDragging(false);
+    if (modelStatus !== "ready") return;
+
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    await processImageFile(file);
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    if (modelStatus === "ready") {
+      setIsDragging(true);
+    }
+  }
+
+  function handleDragLeave(event) {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setIsDragging(false);
+    }
+  }
+
+  async function processImageFile(file) {
     if (!file.type.startsWith("image/")) {
       setError(t.chooseImageError);
       return;
@@ -146,20 +185,31 @@ export default function App() {
     await runPrediction(file);
   }
 
-  async function handleSample() {
-    setResult(null);
-    setError("");
-    setFileName("test1.jpg");
-    setPreviewUrl(SAMPLE_PATH);
+  async function runSamplePrediction() {
+    try {
+      setResult(null);
+      setError("");
+      setFileName("test1.jpg");
+      setPreviewUrl((previousUrl) => {
+        if (previousUrl?.startsWith("blob:")) URL.revokeObjectURL(previousUrl);
+        return SAMPLE_PATH;
+      });
 
-    const response = await fetch(SAMPLE_PATH);
-    const blob = await response.blob();
-    const file = new File([blob], "test1.jpg", { type: blob.type || "image/jpeg" });
-    await runPrediction(file);
+      const response = await fetch(SAMPLE_PATH);
+      if (!response.ok) {
+        throw new Error("Could not load the sample image.");
+      }
+
+      const blob = await response.blob();
+      const file = new File([blob], "test1.jpg", { type: blob.type || "image/jpeg" });
+      await runPrediction(file, true);
+    } catch (sampleError) {
+      setError(sampleError.message);
+    }
   }
 
-  async function runPrediction(file) {
-    if (modelStatus !== "ready") return;
+  async function runPrediction(file, force = false) {
+    if (!force && modelStatus !== "ready") return;
 
     setIsPredicting(true);
     try {
@@ -171,17 +221,22 @@ export default function App() {
     }
   }
 
+  function openPreview(src, title) {
+    setPreviewDialog({ src, title });
+  }
+
   return (
     <div className="app-page">
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="/">
-            PokeFinder
+            <span className="brand-mark" aria-hidden="true" />
+            PokeFInder
           </a>
           <div className="topbar-actions">
-            <div className={`model-status ${modelStatus}`}>
-              <span />
-              {statusText}
+            <div className={`model-status ${modelStatus}`} aria-label={statusText}>
+              <span className="status-light" />
+              <span className="status-label">{statusText}</span>
             </div>
             <div className="language-toggle" aria-label="Language selector">
               <button
@@ -204,111 +259,192 @@ export default function App() {
       </header>
 
       <main className="main-canvas">
-        <section className="hero">
-          <h1>{t.heroTitle}</h1>
-          <p>{t.heroBody}</p>
-        </section>
+        
 
-        <section className="scanner-card">
-          <div className="scan-preview">
-            <div className="preview-frame">
+        <section className="finder-dashboard" aria-label="Pokemon image classifier">
+          <aside className="input-column">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">{t.uploadTitle}</p>
+                <h2>{fileName}</h2>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="preview-button"
+              onClick={() => openPreview(previewUrl, t.uploadedImage)}
+              aria-label={t.uploadedImage}
+            >
               <img src={previewUrl} alt="Selected Pokemon preview" />
               {isPredicting ? (
-                <div className="scan-layer">
+                <span className="scan-layer">
                   <span />
                   {t.classifying}
-                </div>
+                </span>
               ) : null}
-            </div>
-          </div>
+            </button>
 
-          <div className="upload-panel">
-            <label className="dropzone">
+            
+            <label
+              className={`dropzone ${isDragging ? "dragging" : ""}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               <input type="file" accept="image/*" onChange={handleFileChange} disabled={modelStatus !== "ready"} />
               <span className="camera-mark">+</span>
-              <strong>{t.chooseImage}</strong>
-              <small>{t.fileHelp} {fileName}</small>
+              <span>
+                <strong>{t.chooseImage}</strong>
+                <small>{t.dropHelp || t.fileHelp}</small>
+              </span>
             </label>
 
-            <div className="button-row">
-              <button type="button" onClick={handleSample} disabled={modelStatus !== "ready" || isPredicting}>
-                {t.runSample}
-              </button>
-              <button type="button" className="secondary-button" disabled>
-                {t.pasteUrl}
-              </button>
-            </div>
+            <p className="file-meta">
+              {t.currentFile}: <span>{fileName}</span>
+            </p>
 
             {error ? <p className="error-box">{error}</p> : null}
-          </div>
-        </section>
+          </aside>
 
-        <section className="results-section">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">{t.analysisResults}</p>
-              <h2>{topPrediction ? t.matchesFound : t.readyToAnalyze}</h2>
+          <section className="results-panel" ref={resultsRef}>
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">{t.analysisResults}</p>
+                <h2>{topPrediction ? t.matchesFound : t.readyToAnalyze}</h2>
+              </div>
+              {topPrediction ? <span className="result-count">{topFivePredictions.length} {t.matches}</span> : null}
             </div>
-            {topPrediction ? <span className="result-count">{result.predictions.length} {t.matches}</span> : null}
-          </div>
 
-          {topPrediction ? (
-            <div className="result-grid">
-              <article className={`primary-result ${isLowConfidence ? "low-confidence" : ""}`}>
-                <div className="primary-image">
-                  <img src={getPokemonImage(thumbnails, topPrediction.label, previewUrl)} alt={topPrediction.label} />
-                  <span>{isLowConfidence ? t.lowConfidence : t.primaryMatch}</span>
+            {topPrediction ? (
+              <div className="ranked-results">
+                <PrimaryResult
+                  prediction={topPrediction}
+                  language={language}
+                  pokemonKoNames={pokemonKoNames}
+                  isLowConfidence={isLowConfidence}
+                  text={t}
+                />
+
+                <div className="secondary-grid">
+                  {secondaryPredictions.map((prediction, index) => (
+                    <SecondaryResult
+                      key={prediction.classIndex}
+                      rank={index + 2}
+                      prediction={prediction}
+                      language={language}
+                      pokemonKoNames={pokemonKoNames}
+                      text={t}
+                    />
+                  ))}
                 </div>
-                <div className="primary-content">
-                  <div className="result-title-row">
-                    <div>
-                      <p className="eyebrow">{t.topPrediction}</p>
-                      <h3>{displayPokemonName(topPrediction.label, language, pokemonKoNames)}</h3>
-                    </div>
-                    <div className="confidence-score">
-                      <strong>{formatPercent(topPrediction.confidence)}</strong>
-                      <small>{t.confidence}</small>
-                    </div>
-                  </div>
-
-                  <p className="result-copy">
-                    {isLowConfidence ? t.uncertainCopy : t.strongCopy}
-                  </p>
-
-                  <div className="confidence-track">
-                    <div style={{ width: formatPercent(topPrediction.confidence) }} />
-                  </div>
-                </div>
-              </article>
-
-              <aside className="side-results">
-                {secondaryPredictions.map((prediction) => (
-                  <article className="secondary-result" key={prediction.classIndex}>
-                    <div>
-                      <h4>{displayPokemonName(prediction.label, language, pokemonKoNames)}</h4>
-                      <p>{t.alternativeMatch}</p>
-                    </div>
-                    <strong>{formatPercent(prediction.confidence)}</strong>
-                    <div className="mini-track">
-                      <div style={{ width: formatPercent(prediction.confidence) }} />
-                    </div>
-                  </article>
-                ))}
-
-                <article className="tip-card">
-                  <p className="eyebrow">{t.recognitionTip}</p>
-                  <p>{t.tipBody}</p>
-                </article>
-              </aside>
-            </div>
-          ) : (
-            <div className="empty-result">
-              <h3>{t.noAnalysis}</h3>
-              <p>{t.noAnalysisBody}</p>
-            </div>
-          )}
+              </div>
+            ) : (
+              <div className="empty-result">
+                <h3>{t.noAnalysis}</h3>
+                <p>{t.noAnalysisBody}</p>
+              </div>
+            )}
+          </section>
         </section>
       </main>
+
+      {previewDialog ? (
+        <div className="dialog-backdrop" role="presentation" onClick={() => setPreviewDialog(null)}>
+          <div
+            className="image-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={previewDialog.title}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button type="button" className="dialog-close" onClick={() => setPreviewDialog(null)}>
+              {t.closePreview}
+            </button>
+            <img src={previewDialog.src} alt={previewDialog.title} />
+            <h2>{previewDialog.title}</h2>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PrimaryResult({
+  prediction,
+  language,
+  pokemonKoNames,
+  isLowConfidence,
+  text,
+}) {
+  const name = displayPokemonName(prediction.label, language, pokemonKoNames);
+  const tone = confidenceTone(prediction.confidence);
+  const accent = accentForLabel(prediction.label);
+
+  return (
+    <article className={`primary-result ${isLowConfidence ? "low-confidence" : ""}`} style={accent}>
+      <div className="primary-content">
+        <div className="result-title-row">
+          <div>
+            <p className="eyebrow">{text.topPrediction}</p>
+            <h3>{name}</h3>
+          </div>
+          <CircularProgress percent={prediction.confidence} tone={tone} label={text.confidence} />
+        </div>
+
+        <span className="rank-badge">{isLowConfidence ? text.lowConfidence : text.primaryMatch}</span>
+
+        <p className="result-copy">
+          {isLowConfidence ? text.uncertainCopy : text.strongCopy}
+        </p>
+
+        <ConfidenceBar percent={prediction.confidence} tone={tone} />
+      </div>
+    </article>
+  );
+}
+
+function SecondaryResult({
+  rank,
+  prediction,
+  language,
+  pokemonKoNames,
+  text,
+}) {
+  const name = displayPokemonName(prediction.label, language, pokemonKoNames);
+  const tone = confidenceTone(prediction.confidence);
+  const accent = accentForLabel(prediction.label);
+
+  return (
+    <article className={`secondary-result ${tone}`} style={accent}>
+      <div className="secondary-body">
+        <div className="secondary-title">
+          <span>#{rank}</span>
+          <strong>{formatPercent(prediction.confidence)}</strong>
+        </div>
+        <h4>{name}</h4>
+        <p>{text.alternativeMatch}</p>
+        <ConfidenceBar percent={prediction.confidence} tone={tone} small />
+      </div>
+    </article>
+  );
+}
+
+function CircularProgress({ percent, tone, label }) {
+  const degrees = Math.round(percent * 360);
+
+  return (
+    <div className={`confidence-ring ${tone}`} style={{ "--progress": `${degrees}deg` }}>
+      <strong>{formatPercent(percent)}</strong>
+      <small>{label}</small>
+    </div>
+  );
+}
+
+function ConfidenceBar({ percent, tone, small = false }) {
+  return (
+    <div className={`confidence-track ${tone} ${small ? "small" : ""}`}>
+      <div style={{ width: formatPercent(percent) }} />
     </div>
   );
 }
@@ -317,19 +453,27 @@ function formatPercent(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function getPokemonImage(thumbnails, label, fallbackUrl) {
-  const thumbnail = thumbnails[label];
-  if (!thumbnail) {
-    return fallbackUrl;
-  }
-
-  return `${import.meta.env.BASE_URL}pokemon-thumbnails/${thumbnail}`;
-}
-
 function displayPokemonName(label, language, pokemonKoNames) {
   if (language !== "ko") {
     return label;
   }
 
   return pokemonKoNames[label] || label;
+}
+
+function confidenceTone(value) {
+  if (value >= 0.8) return "very-high";
+  if (value >= 0.55) return "high";
+  if (value >= 0.35) return "medium";
+  return "low";
+}
+
+function accentForLabel(label) {
+  const hue = [...label].reduce((total, character) => total + character.charCodeAt(0), 0) % 360;
+
+  return {
+    "--pokemon-accent": `hsl(${hue} 72% 44%)`,
+    "--pokemon-soft": `hsl(${hue} 82% 94%)`,
+    "--pokemon-wash": `hsl(${hue} 78% 97%)`,
+  };
 }
