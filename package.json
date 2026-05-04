@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "build:pages": "vite build --base=/pokefinder/",
+    "build:pages": "vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {

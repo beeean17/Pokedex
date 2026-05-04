@@ -83,7 +83,7 @@ function readPokemonThumbnails() {
 
     const extension = path.extname(firstImage.name).toLowerCase();
     const outputName = `${encodeURIComponent(classDir.name)}${extension}`;
-    const url = `${thumbnailRoute}/${outputName}`;
+    const url = `${outputName}`;
     const filePath = path.join(classPath, firstImage.name);
 
     manifest[classDir.name] = url;
@@ -132,6 +132,6 @@ function pokemonThumbnails() {
 }
 
 export default defineConfig({
-  base: process.env.VITE_BASE_PATH || "/",
+  base: process.env.VITE_BASE_PATH || "/pokefinder/",
   plugins: [react(), onnxRuntimeWasm(), pokemonThumbnails()],
 });

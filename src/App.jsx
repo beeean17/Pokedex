@@ -318,7 +318,12 @@ function formatPercent(value) {
 }
 
 function getPokemonImage(thumbnails, label, fallbackUrl) {
-  return thumbnails[label] || fallbackUrl;
+  const thumbnail = thumbnails[label];
+  if (!thumbnail) {
+    return fallbackUrl;
+  }
+
+  return `${import.meta.env.BASE_URL}pokemon-thumbnails/${thumbnail}`;
 }
 
 function displayPokemonName(label, language, pokemonKoNames) {
