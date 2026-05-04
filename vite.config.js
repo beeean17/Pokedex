@@ -132,6 +132,6 @@ function pokemonThumbnails() {
 }
 
 export default defineConfig({
-  base: process.env.VITE_BASE_PATH || "/pokefinder/",
+  base: process.env.VITE_BASE_PATH || "/",
   plugins: [react(), onnxRuntimeWasm(), pokemonThumbnails()],
 });
