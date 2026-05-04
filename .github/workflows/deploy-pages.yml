@@ -34,7 +34,7 @@ jobs:
       - name: Build
         run: npm run build:pages
         env:
-          VITE_BASE_PATH: /pokefinder/
+          VITE_BASE_PATH: /PokeFinder/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
