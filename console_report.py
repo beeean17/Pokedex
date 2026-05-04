@@ -79,11 +79,24 @@ def print_training_report(metrics_path: Path) -> None:
     print(f"Best val top-1: {float(metrics.get('bestValTop1', 0.0)):.2%}")
     augmentation = metrics.get("augmentation")
     if augmentation:
-        print(
-            "Augmentation: "
-            f"{float(augmentation['cropProbability']):.0%} random crop, "
-            f"crop scale {float(augmentation['cropScaleMin']):.2f}-1.00"
-        )
+        if "fullProbability" in augmentation:
+            print(
+                "Augmentation: "
+                f"{float(augmentation.get('fullProbability', 0.0)):.0%} full letterbox, "
+                f"{float(augmentation.get('objectProbability', 0.0)):.0%} object-centered crop "
+                f"(scale={float(augmentation.get('objectScaleMin', 0.0)):.2f}-1.00), "
+                f"{float(augmentation.get('featureProbability', 0.0)):.0%} feature-centered crop "
+                f"(scale={float(augmentation.get('featureScaleMin', 0.0)):.2f}-0.55)"
+            )
+        elif "cropProbability" in augmentation:
+            print(
+                "Augmentation: "
+                f"{float(augmentation.get('cropProbability', 0.0)):.0%} random crop, "
+                f"crop scale {float(augmentation.get('cropScaleMin', 0.0)):.2f}-1.00"
+            )
+        else:
+            formatted = ", ".join(f"{key}={value}" for key, value in sorted(augmentation.items()))
+            print(f"Augmentation: {formatted}")
     print()
 
     history = metrics.get("history", [])
