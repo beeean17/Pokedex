@@ -19,7 +19,7 @@ class AppErrorBoundary extends React.Component {
         <main className="app-shell centered-shell">
           <section className="blocked-panel">
             <p className="kicker">Render error</p>
-            <h1>Pokedex Classifier</h1>
+            <h1>PokeFinder</h1>
             <p>{this.state.error.message || "The app could not render."}</p>
           </section>
         </main>

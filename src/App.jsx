@@ -11,7 +11,7 @@ const TEXT = {
   en: {
     blockedEyebrow: "Desktop browser recommended",
     blockedBody: "This client-side model runs best on desktop Chrome or Edge.",
-    heroTitle: "Pokemon Image Classifier",
+    heroTitle: "PokeFinder",
     heroBody: "Upload a Pokemon image and run local ONNX inference directly in the browser. No backend upload is used.",
     modelReady: "Model ready",
     modelFailed: "Model failed",
@@ -42,7 +42,7 @@ const TEXT = {
   ko: {
     blockedEyebrow: "데스크톱 브라우저 권장",
     blockedBody: "이 클라이언트 모델은 데스크톱 Chrome 또는 Edge에서 가장 안정적으로 동작합니다.",
-    heroTitle: "포켓몬 이미지 분류기",
+    heroTitle: "PokeFinder",
     heroBody: "포켓몬 이미지를 업로드하면 서버 업로드 없이 브라우저에서 바로 ONNX 추론을 실행합니다.",
     modelReady: "모델 준비 완료",
     modelFailed: "모델 로드 실패",
@@ -176,7 +176,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <a className="brand" href="/">
-            POKEDEX
+            PokeFinder
           </a>
           <div className="topbar-actions">
             <div className={`model-status ${modelStatus}`}>

@@ -1,8 +1,10 @@
 {
+  "name": "pokefinder",
+  "private": true,
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "build:pages": "vite build --base=/Pokedex/",
+    "build:pages": "vite build --base=/pokefinder/",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {

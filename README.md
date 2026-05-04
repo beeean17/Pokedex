@@ -1,4 +1,4 @@
-# Pokedex
+# PokeFinder
 
 Pokemon classifier pipeline with Python training and a static React browser classifier.
 
