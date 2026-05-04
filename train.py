@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import time
 from pathlib import Path
@@ -12,6 +13,7 @@ try:
     from torch import nn
     from torch.utils.data import DataLoader, Dataset
     from torchvision import models, transforms
+    from torchvision.transforms import functional as TF
 except ImportError as exc:  # pragma: no cover - exercised before dependencies exist
     raise SystemExit(
         "Training dependencies are missing. Install them with: "
@@ -68,20 +70,104 @@ class LetterboxResize:
         return canvas
 
 
-class RandomCropOrLetterbox:
-    def __init__(self, size: int, crop_probability: float, crop_scale: tuple[float, float]) -> None:
-        self.letterbox = LetterboxResize(size)
-        self.crop_probability = crop_probability
-        self.crop = transforms.RandomResizedCrop(
-            size,
-            scale=crop_scale,
-            ratio=(0.75, 1.33),
+class BiasedRandomResizedCrop:
+    def __init__(
+        self,
+        size: int,
+        scale: tuple[float, float],
+        ratio: tuple[float, float],
+        center_x: tuple[float, float],
+        center_y: tuple[float, float],
+    ) -> None:
+        self.size = size
+        self.scale = scale
+        self.ratio = ratio
+        self.center_x = center_x
+        self.center_y = center_y
+
+    def __call__(self, image: Image.Image) -> Image.Image:
+        image = image.convert("RGB")
+        width, height = image.size
+        area = width * height
+
+        for _ in range(10):
+            target_area = area * float(torch.empty(1).uniform_(self.scale[0], self.scale[1]).item())
+            log_ratio = torch.empty(1).uniform_(math.log(self.ratio[0]), math.log(self.ratio[1]))
+            aspect_ratio = float(torch.exp(log_ratio).item())
+
+            crop_width = round((target_area * aspect_ratio) ** 0.5)
+            crop_height = round((target_area / aspect_ratio) ** 0.5)
+            if crop_width <= 0 or crop_height <= 0 or crop_width > width or crop_height > height:
+                continue
+
+            center_x = width * float(torch.empty(1).uniform_(self.center_x[0], self.center_x[1]).item())
+            center_y = height * float(torch.empty(1).uniform_(self.center_y[0], self.center_y[1]).item())
+            left = int(round(center_x - crop_width / 2))
+            top = int(round(center_y - crop_height / 2))
+            left = min(max(left, 0), width - crop_width)
+            top = min(max(top, 0), height - crop_height)
+
+            return TF.resized_crop(
+                image,
+                top=top,
+                left=left,
+                height=crop_height,
+                width=crop_width,
+                size=[self.size, self.size],
+                interpolation=transforms.InterpolationMode.BILINEAR,
+            )
+
+        side = min(width, height)
+        left = (width - side) // 2
+        top = (height - side) // 2
+        return TF.resized_crop(
+            image,
+            top=top,
+            left=left,
+            height=side,
+            width=side,
+            size=[self.size, self.size],
             interpolation=transforms.InterpolationMode.BILINEAR,
         )
 
+
+class PokemonViewSampler:
+    def __init__(
+        self,
+        size: int,
+        full_probability: float,
+        object_probability: float,
+        feature_probability: float,
+        object_scale_min: float,
+        feature_scale_min: float,
+    ) -> None:
+        self.letterbox = LetterboxResize(size)
+        self.full_probability = full_probability
+        self.object_probability = object_probability
+        self.feature_probability = feature_probability
+        self.object_crop = BiasedRandomResizedCrop(
+            size,
+            scale=(object_scale_min, 1.0),
+            ratio=(0.75, 1.33),
+            center_x=(0.35, 0.65),
+            center_y=(0.35, 0.65),
+        )
+        self.feature_crop = BiasedRandomResizedCrop(
+            size,
+            scale=(feature_scale_min, 0.55),
+            ratio=(0.75, 1.33),
+            center_x=(0.35, 0.65),
+            center_y=(0.22, 0.58),
+        )
+
     def __call__(self, image: Image.Image) -> Image.Image:
-        if torch.rand(1).item() < self.crop_probability:
-            return self.crop(image.convert("RGB"))
+        draw = torch.rand(1).item()
+        if draw < self.full_probability:
+            return self.letterbox(image)
+        if draw < self.full_probability + self.object_probability:
+            return self.object_crop(image)
+        if self.feature_probability > 0:
+            return self.feature_crop(image)
         return self.letterbox(image)
 
 
@@ -117,13 +203,53 @@ def choose_device(requested: str) -> torch.device:
     return torch.device("cpu")
 
 
-def make_transforms(crop_probability: float, crop_scale_min: float) -> tuple[transforms.Compose, transforms.Compose]:
+def resolve_view_config(args: argparse.Namespace) -> dict[str, float]:
+    uses_legacy_crop = args.crop_probability is not None
+    uses_view_probabilities = any(
+        value is not None
+        for value in (args.full_image_probability, args.object_crop_probability, args.feature_crop_probability)
+    )
+    if uses_legacy_crop and uses_view_probabilities:
+        raise SystemExit("Use either --crop-probability or the explicit view probabilities, not both.")
+
+    if uses_legacy_crop:
+        crop_probability = float(args.crop_probability)
+        if not 0.0 <= crop_probability <= 1.0:
+            raise SystemExit("--crop-probability must be between 0.0 and 1.0.")
+        return {
+            "fullProbability": 1.0 - crop_probability,
+            "objectProbability": crop_probability * 0.6,
+            "featureProbability": crop_probability * 0.4,
+            "objectScaleMin": max(float(args.crop_scale_min), 0.45),
+            "featureScaleMin": min(float(args.crop_scale_min), 0.55),
+        }
+
+    config = {
+        "fullProbability": 0.5 if args.full_image_probability is None else float(args.full_image_probability),
+        "objectProbability": 0.3 if args.object_crop_probability is None else float(args.object_crop_probability),
+        "featureProbability": 0.2 if args.feature_crop_probability is None else float(args.feature_crop_probability),
+        "objectScaleMin": float(args.object_crop_scale_min),
+        "featureScaleMin": float(args.feature_crop_scale_min),
+    }
+
+    probabilities = [config["fullProbability"], config["objectProbability"], config["featureProbability"]]
+    if any(probability < 0.0 or probability > 1.0 for probability in probabilities):
+        raise SystemExit("View probabilities must be between 0.0 and 1.0.")
+    if abs(sum(probabilities) - 1.0) > 1e-6:
+        raise SystemExit("View probabilities must sum to 1.0.")
+    return config
+
+
+def make_transforms(view_config: dict[str, float]) -> tuple[transforms.Compose, transforms.Compose]:
     train_transform = transforms.Compose(
         [
-            RandomCropOrLetterbox(
+            PokemonViewSampler(
                 INPUT_SIZE,
-                crop_probability=crop_probability,
-                crop_scale=(crop_scale_min, 1.0),
+                full_probability=view_config["fullProbability"],
+                object_probability=view_config["objectProbability"],
+                feature_probability=view_config["featureProbability"],
+                object_scale_min=view_config["objectScaleMin"],
+                feature_scale_min=view_config["featureScaleMin"],
             ),
             transforms.RandomHorizontalFlip(),
             transforms.RandomAffine(
@@ -220,15 +346,45 @@ def main() -> None:
     parser.add_argument("--freeze-backbone", action="store_true")
     parser.add_argument(
         "--crop-probability",
-        default=0.55,
+        default=None,
         type=float,
-        help="Probability of training on a partial random crop instead of the full letterboxed image.",
+        help="Legacy shortcut: total probability of cropped training views instead of full letterbox.",
     )
     parser.add_argument(
         "--crop-scale-min",
         default=0.35,
         type=float,
-        help="Smallest area ratio used by RandomResizedCrop for partial/face-like crops.",
+        help="Legacy smallest area ratio for --crop-probability feature-like crops.",
+    )
+    parser.add_argument(
+        "--full-image-probability",
+        default=None,
+        type=float,
+        help="Probability of training on the full letterboxed image. Default: 0.50.",
+    )
+    parser.add_argument(
+        "--object-crop-probability",
+        default=None,
+        type=float,
+        help="Probability of training on a large center-biased object crop. Default: 0.30.",
+    )
+    parser.add_argument(
+        "--feature-crop-probability",
+        default=None,
+        type=float,
+        help="Probability of training on a smaller upper/center-biased feature crop. Default: 0.20.",
+    )
+    parser.add_argument(
+        "--object-crop-scale-min",
+        default=0.55,
+        type=float,
+        help="Smallest area ratio for object-centered crops.",
+    )
+    parser.add_argument(
+        "--feature-crop-scale-min",
+        default=0.25,
+        type=float,
+        help="Smallest area ratio for feature-centered crops.",
     )
     args = parser.parse_args()
 
@@ -238,12 +394,16 @@ def main() -> None:
     train_records = [row for row in records if row["split"] == "train"]
     val_records = [row for row in records if row["split"] == "val"]
 
-    if not 0.0 <= args.crop_probability <= 1.0:
-        raise SystemExit("--crop-probability must be between 0.0 and 1.0.")
     if not 0.05 <= args.crop_scale_min <= 1.0:
         raise SystemExit("--crop-scale-min must be between 0.05 and 1.0.")
+    if not 0.05 <= args.object_crop_scale_min <= 1.0:
+        raise SystemExit("--object-crop-scale-min must be between 0.05 and 1.0.")
+    if not 0.05 <= args.feature_crop_scale_min <= 0.55:
+        raise SystemExit("--feature-crop-scale-min must be between 0.05 and 0.55.")
 
-    train_transform, val_transform = make_transforms(args.crop_probability, args.crop_scale_min)
+    view_config = resolve_view_config(args)
+
+    train_transform, val_transform = make_transforms(view_config)
     train_loader = DataLoader(
         PokemonDataset(train_records, train_transform),
         batch_size=args.batch_size,
@@ -261,9 +421,11 @@ def main() -> None:
     print(f"Using device: {device}")
     print(
         "Training augmentation: "
-        f"{args.crop_probability:.0%} random partial crop "
-        f"(scale={args.crop_scale_min:.2f}-1.00), "
-        f"{1.0 - args.crop_probability:.0%} full letterbox"
+        f"{view_config['fullProbability']:.0%} full letterbox, "
+        f"{view_config['objectProbability']:.0%} object-centered crop "
+        f"(scale={view_config['objectScaleMin']:.2f}-1.00), "
+        f"{view_config['featureProbability']:.0%} feature-centered crop "
+        f"(scale={view_config['featureScaleMin']:.2f}-0.55)"
     )
     model = build_model(
         num_classes=len(classes),
@@ -327,8 +489,7 @@ def main() -> None:
                     "std": IMAGENET_STD,
                     "metrics": val_metrics,
                     "augmentation": {
-                        "cropProbability": args.crop_probability,
-                        "cropScaleMin": args.crop_scale_min,
+                        **view_config,
                     },
                 },
                 args.output,
@@ -338,8 +499,7 @@ def main() -> None:
         "durationSeconds": round(time.time() - started_at, 3),
         "bestValTop1": best_top1,
         "augmentation": {
-            "cropProbability": args.crop_probability,
-            "cropScaleMin": args.crop_scale_min,
+            **view_config,
         },
         "history": history,
     }

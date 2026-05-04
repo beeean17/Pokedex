@@ -76,6 +76,31 @@
 | MobileNetV3-Large | 정확도와 속도 균형 | 권장 |
 | EfficientNet-Lite | 모바일/엣지 추론 최적화 | 정확도 우선 시 적합 |
 
+### 3.1.1 포켓몬 특징부 중심 학습 전략
+
+포켓몬 이미지는 사람 얼굴처럼 일정한 얼굴 구조를 가지지 않는다. 따라서 별도의 얼굴 탐지 모델을 먼저 학습하기보다는, 분류 모델 학습 단계에서 다양한 시야의 이미지를 섞는 방식을 우선 적용한다.
+
+학습 이미지는 다음 세 가지 view로 구성한다.
+
+| View | 비율 | 목적 |
+|---|---:|---|
+| Full image | 50% | 전체 실루엣, 꼬리, 등껍질, 날개 등 전신 특징 보존 |
+| Object-centered crop | 30% | 배경 영향을 줄이고 포켓몬 중심부 특징 강화 |
+| Feature-centered crop | 20% | 얼굴 또는 상단 특징부처럼 부분 이미지 입력에 대한 강건성 확보 |
+
+이 방식은 “얼굴만 보는 모델”이 아니라 “전체 이미지와 부분 특징을 함께 보는 모델”을 만든다. 피카츄의 귀, 꼬부기의 등껍질, 파이리의 꼬리처럼 얼굴 외의 식별 특징이 중요한 경우가 많기 때문에 full image 비율을 유지하는 것이 중요하다.
+
+학습 파이프라인은 다음 방향을 따른다.
+
+```text
+원본 학습 이미지
+→ full letterbox / object crop / feature crop 중 하나를 확률적으로 선택
+→ 색상, 기하학적 augmentation 적용
+→ EfficientNet-B0 기반 Transfer Learning
+```
+
+기본 권장 비율은 `full 0.50`, `object crop 0.30`, `feature crop 0.20`이다. 부분 이미지 정확도가 더 중요하면 feature crop 비율을 높일 수 있지만, 전신 이미지 정확도 하락을 막기 위해 full image 비율은 지나치게 낮추지 않는다.
+
 ---
 
 ## 3.2 Frontend Service
@@ -191,13 +216,27 @@ FP32 모델
 ```text
 원본 이미지
 → Canvas에 로드
-→ 224x224로 리사이즈
+→ full / object crop / feature crop view 생성
+→ 각 view를 224x224로 리사이즈
 → RGB 값 추출
 → 0~1 범위로 정규화
-→ Tensor 변환
+→ Tensor batch 변환
 ```
 
 이 과정을 브라우저에서 수행하면 이미지를 서버로 전송할 필요가 없다.
+
+추론 시에는 세 개 view를 같은 모델에 입력하고, 각 결과의 logits를 평균낸 뒤 softmax를 적용한다.
+
+```text
+full image logits
+object crop logits
+feature crop logits
+→ logits 평균
+→ softmax
+→ 최종 Top-K 예측
+```
+
+이 구조는 별도의 얼굴 탐지 모델을 브라우저에 추가하지 않으면서도, 얼굴 또는 일부 특징만 보이는 업로드 이미지에 대한 안정성을 높인다. 추가 모델을 배포하지 않으므로 ONNX 파일 크기와 초기 로딩 비용도 크게 증가하지 않는다.
 
 ---
 

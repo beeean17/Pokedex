@@ -3,7 +3,32 @@ export async function imageFileToTensor(file, labels) {
   return imageToTensor(image, labels);
 }
 
-export function imageToTensor(image, labels) {
+export async function imageFileToTensors(file, labels) {
+  const image = await loadImage(file);
+  return imageToTensors(image, labels);
+}
+
+export function imageToTensors(image, labels) {
+  const views = [
+    { name: "full", kind: "letterbox" },
+    { name: "object", kind: "crop", scale: 0.86, centerX: 0.5, centerY: 0.5 },
+    { name: "feature", kind: "crop", scale: 0.58, centerX: 0.5, centerY: 0.42 },
+  ];
+  const tensors = views.map((view) => imageToTensor(image, labels, view));
+  const tensorLength = tensors[0].length;
+  const data = new Float32Array(tensorLength * tensors.length);
+
+  tensors.forEach((tensor, index) => {
+    data.set(tensor, index * tensorLength);
+  });
+
+  return {
+    data,
+    views: views.map((view) => view.name),
+  };
+}
+
+export function imageToTensor(image, labels, view = { kind: "letterbox" }) {
   const inputSize = Number(labels.inputSize);
   const canvas = document.createElement("canvas");
   canvas.width = inputSize;
@@ -13,12 +38,11 @@ export function imageToTensor(image, labels) {
   context.fillStyle = "rgb(255, 255, 255)";
   context.fillRect(0, 0, inputSize, inputSize);
 
-  const scale = Math.min(inputSize / image.naturalWidth, inputSize / image.naturalHeight);
-  const width = Math.round(image.naturalWidth * scale);
-  const height = Math.round(image.naturalHeight * scale);
-  const left = Math.floor((inputSize - width) / 2);
-  const top = Math.floor((inputSize - height) / 2);
-  context.drawImage(image, left, top, width, height);
+  if (view.kind === "crop") {
+    drawCrop(context, image, inputSize, view);
+  } else {
+    drawLetterbox(context, image, inputSize);
+  }
 
   const pixels = context.getImageData(0, 0, inputSize, inputSize).data;
   const channels = 3;
@@ -37,6 +61,38 @@ export function imageToTensor(image, labels) {
   }
 
   return tensor;
+}
+
+function drawLetterbox(context, image, inputSize) {
+  const imageWidth = getImageWidth(image);
+  const imageHeight = getImageHeight(image);
+  const scale = Math.min(inputSize / imageWidth, inputSize / imageHeight);
+  const width = Math.round(imageWidth * scale);
+  const height = Math.round(imageHeight * scale);
+  const left = Math.floor((inputSize - width) / 2);
+  const top = Math.floor((inputSize - height) / 2);
+  context.drawImage(image, left, top, width, height);
+}
+
+function drawCrop(context, image, inputSize, view) {
+  const imageWidth = getImageWidth(image);
+  const imageHeight = getImageHeight(image);
+  const side = Math.max(1, Math.round(Math.min(imageWidth, imageHeight) * view.scale));
+  const left = clamp(Math.round(imageWidth * view.centerX - side / 2), 0, imageWidth - side);
+  const top = clamp(Math.round(imageHeight * view.centerY - side / 2), 0, imageHeight - side);
+  context.drawImage(image, left, top, side, side, 0, 0, inputSize, inputSize);
+}
+
+function getImageWidth(image) {
+  return image.naturalWidth || image.width;
+}
+
+function getImageHeight(image) {
+  return image.naturalHeight || image.height;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function loadImage(file) {
